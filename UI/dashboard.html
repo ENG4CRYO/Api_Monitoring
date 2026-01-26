@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ApiWatchdog | Mission Control</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: { dark: { 900: '#0B0E14', 800: '#151923', 700: '#1E2330' } }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background-color: #0B0E14;
+            color: #E2E8F0;
+            overflow: hidden;
+        }
+
+   
+        .glass-panel {
+            background: rgba(21, 25, 35, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+            .glass-panel:hover {
+                border-color: rgba(255, 255, 255, 0.1);
+                background: rgba(30, 41, 59, 0.4);
+            }
+       
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: #475569;
+            }
+
+    
+        .slide-enter-active, .slide-leave-active {
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .slide-enter-from, .slide-leave-to {
+            transform: translateX(100%);
+        }
+
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.2s ease;
+        }
+
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+
+        
+        [v-cloak] {
+            display: none;
+        }
+    </style>
+</head>
+<body class="antialiased h-screen flex flex-col">
+    <div id="app" class="h-full flex flex-col" v-cloak>
+
+        <nav class="h-16 border-b border-white/5 bg-dark-900/80 backdrop-blur-md flex items-center justify-between px-6 z-20 shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-shield-dog text-white text-sm"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight text-white">ApiWatchdog <span class="text-[10px] font-normal text-gray-400 border border-gray-700 rounded px-1.5 py-0.5 ml-2">PRO</span></h1>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-3 bg-dark-800 px-4 py-1.5 rounded-full border border-white/5">
+                    <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Health</span>
+                    <div class="h-1.5 w-24 bg-gray-700 rounded-full overflow-hidden">
+                        <div class="h-full transition-all duration-1000 ease-out" :class="healthColor" :style="{ width: healthScore + '%' }"></div>
+                    </div>
+                    <span class="text-sm font-mono font-bold" :class="healthTextColor">{{ healthScore }}%</span>
+                </div>
+
+                <div class="flex items-center gap-2" title="SignalR Status">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span v-if="connected" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5" :class="connected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                    </span>
+                    <span class="text-xs font-mono text-gray-400">{{ connected ? 'LIVE' : 'OFFLINE' }}</span>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-1 flex overflow-hidden">
+            <div class="flex-1 flex flex-col overflow-y-auto p-6 scroll-smooth">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-blue-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Total Requests</p>
+                                <h3 class="text-3xl font-bold mt-2 font-mono text-white">{{ formatNumber(stats.totalRequests) }}</h3>
+                            </div>
+                            <div class="p-2 bg-blue-500/10 rounded-lg text-blue-400"><i class="fa-solid fa-server"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-purple-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Throughput</p>
+                                <h3 class="text-3xl font-bold mt-2 font-mono text-white">{{ stats.rpm }} <span class="text-sm text-gray-500 font-sans font-normal">rpm</span></h3>
+                            </div>
+                            <div class="p-2 bg-purple-500/10 rounded-lg text-purple-400"><i class="fa-solid fa-bolt"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-amber-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Avg Latency</p>
+                                <h3 class="text-3xl font-bold mt-2 font-mono" :class="getLatencyColor(stats.avgDuration)">
+                                    {{ stats.avgDuration }}<span class="text-sm text-gray-500 font-sans font-normal ml-1">ms</span>
+                                </h3>
+                            </div>
+                            <div class="p-2 bg-amber-500/10 rounded-lg text-amber-400"><i class="fa-regular fa-clock"></i></div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-xl border-l-4 border-rose-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Error Rate</p>
+                                <h3 class="text-3xl font-bold mt-2 font-mono" :class="errorRate > 0 ? 'text-rose-400' : 'text-emerald-400'">{{ errorRate }}%</h3>
+                            </div>
+                            <div class="p-2 bg-rose-500/10 rounded-lg text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="glass-panel p-5 rounded-xl lg:col-span-2 flex flex-col">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-area text-blue-500"></i> Traffic Volume (24h)
+                        </h4>
+                        <div class="flex-1 w-full min-h-[200px]"><canvas id="trafficChart"></canvas></div>
+                    </div>
+                    <div class="glass-panel p-5 rounded-xl flex flex-col">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-purple-500"></i> Status Codes
+                        </h4>
+                        <div class="flex-1 w-full min-h-[200px] flex justify-center items-center"><canvas id="statusChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col min-h-[400px]">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <div class="flex items-center gap-3">
+                            <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                <i class="fa-solid fa-list-ul text-emerald-400"></i> Live Log Stream
+                            </h3>
+                            <span v-if="paused" class="px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-[10px] font-bold border border-yellow-500/50 animate-pulse">PAUSED</span>
+                        </div>
+
+                        <div class="flex gap-2 w-full md:w-auto">
+                            <button @click="togglePause" class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors flex items-center gap-2"
+                                    :class="paused ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/50' : 'bg-dark-800 text-gray-400 border-gray-700 hover:text-white'">
+                                <i :class="paused ? 'fa-solid fa-play' : 'fa-solid fa-pause'"></i> {{ paused ? 'RESUME' : 'PAUSE' }}
+                            </button>
+
+                            <div class="relative flex-1 md:flex-none">
+                                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                                <input v-model="search" type="text" placeholder="Filter path or status..."
+                                       class="bg-dark-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-8 pr-3 py-1.5 w-full md:w-64 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel rounded-xl overflow-hidden flex-1 flex flex-col">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-dark-800/80 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-white/5">
+                                    <tr>
+                                        <th class="px-6 py-3">Timestamp</th>
+                                        <th class="px-6 py-3">Method</th>
+                                        <th class="px-6 py-3">Status</th>
+                                        <th class="px-6 py-3 w-1/3">Path</th>
+                                        <th class="px-6 py-3 text-right">Latency</th>
+                                        <th class="px-6 py-3 text-center"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5 font-mono text-xs">
+                                    <tr v-for="log in filteredLogs" :key="log.id" @click="selectLog(log)"
+                                        class="group hover:bg-white/5 cursor-pointer transition-colors duration-150">
+                                        <td class="px-6 py-3 text-gray-500 whitespace-nowrap">{{ formatTime(log.timestamp) }}</td>
+                                        <td class="px-6 py-3">
+                                            <span class="px-2 py-0.5 rounded border text-[10px] font-bold" :class="getMethodClass(log.method)">
+                                                {{ log.method }}
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDot(log.statusCode)"></span>
+                                                <span :class="getStatusColor(log.statusCode)" class="font-bold">{{ log.statusCode }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <div class="text-gray-300 truncate max-w-xs md:max-w-md group-hover:text-indigo-300 transition-colors" :title="log.path">
+                                                {{ log.path }}
+                                            </div>
+                                            <div v-if="log.queryString" class="text-[10px] text-gray-600 truncate max-w-xs">{{ log.queryString }}</div>
+                                        </td>
+                                        <td class="px-6 py-3 text-right">
+                                            <span :class="getLatencyColor(log.durationMs)">{{ log.durationMs }}ms</span>
+                                        </td>
+                                        <td class="px-6 py-3 text-center text-gray-600 group-hover:text-white">
+                                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-if="filteredLogs.length === 0" class="flex-1 flex flex-col items-center justify-center p-12 text-gray-600">
+                            <div class="w-12 h-12 bg-dark-800 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa-solid fa-satellite-dish text-xl opacity-50"></i>
+                            </div>
+                            <p class="text-sm font-medium">No logs found matching criteria</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <transition name="slide">
+            <div v-if="selectedLog" class="fixed inset-y-0 right-0 w-full md:w-[600px] bg-dark-800 border-l border-white/10 shadow-2xl z-50 flex flex-col">
+                <div class="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-dark-900">
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            Request Details
+                            <span class="text-[10px] font-mono bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">{{ selectedLog.id.split('-')[0] }}</span>
+                        </h2>
+                    </div>
+                    <button @click="selectedLog = null" class="w-8 h-8 rounded-lg bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 flex items-center justify-center transition-all">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-dark-900/50 p-4 rounded-xl border border-white/5 text-center">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Status Code</p>
+                            <p class="text-2xl font-bold font-mono" :class="getStatusColor(selectedLog.statusCode)">{{ selectedLog.statusCode }}</p>
+                        </div>
+                        <div class="bg-dark-900/50 p-4 rounded-xl border border-white/5 text-center">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Duration</p>
+                            <p class="text-2xl font-bold text-white font-mono">{{ selectedLog.durationMs }}ms</p>
+                        </div>
+                        <div class="bg-dark-900/50 p-4 rounded-xl border border-white/5 text-center">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold mb-1">Method</p>
+                            <p class="text-2xl font-bold text-white font-mono">{{ selectedLog.method }}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-gray-500 uppercase font-bold mb-2 block">Request URL</label>
+                        <div class="p-4 bg-dark-900 rounded-xl border border-white/5 font-mono text-sm break-all">
+                            <span class="text-indigo-400">{{ selectedLog.path }}</span><span class="text-amber-400">{{ selectedLog.queryString }}</span>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedLog.exceptionMessage" class="p-5 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                        <h4 class="text-rose-400 font-bold mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-bug"></i> Exception Thrown
+                        </h4>
+                        <p class="text-rose-200 text-sm font-mono leading-relaxed">{{ selectedLog.exceptionMessage }}</p>
+                        <div v-if="selectedLog.stackTrace" class="mt-4 p-3 bg-rose-950/50 rounded-lg text-[10px] text-rose-300/80 font-mono overflow-x-auto whitespace-pre custom-scrollbar border border-rose-500/10">
+                            {{ selectedLog.stackTrace }}
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-900/30 rounded-xl border border-white/5 overflow-hidden">
+                        <div class="grid grid-cols-[120px_1fr] border-b border-white/5 text-xs">
+                            <div class="p-3 bg-white/5 text-gray-400 font-medium">Timestamp</div>
+                            <div class="p-3 text-gray-200 font-mono">{{ new Date(selectedLog.timestamp).toLocaleString() }}</div>
+                        </div>
+                        <div class="grid grid-cols-[120px_1fr] border-b border-white/5 text-xs">
+                            <div class="p-3 bg-white/5 text-gray-400 font-medium">IP Address</div>
+                            <div class="p-3 text-gray-200 font-mono">{{ selectedLog.ipAddress || 'Unknown' }}</div>
+                        </div>
+                        <div class="grid grid-cols-[120px_1fr] text-xs">
+                            <div class="p-3 bg-white/5 text-gray-400 font-medium">User Agent</div>
+                            <div class="p-3 text-gray-400 font-mono break-all leading-relaxed">{{ selectedLog.userAgent }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="fade">
+            <div v-if="selectedLog" @click="selectedLog = null" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"></div>
+        </transition>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                
+                const logs = ref([]);
+                const stats = ref({ totalRequests: 0, rpm: 0, failedRequests: 0, avgDuration: 0, traffic: [], statusDistribution: [] });
+                const connected = ref(false);
+                const paused = ref(false);
+                const buffer = ref([]);
+                const search = ref('');
+                const selectedLog = ref(null);
+
+                let trafficChart = null;
+                let statusChart = null;
+
+                
+                const filteredLogs = computed(() => {
+                    let res = logs.value;
+                    if (search.value) {
+                        const q = search.value.toLowerCase();
+                        res = res.filter(l => l.path.toLowerCase().includes(q) || l.statusCode.toString().includes(q) || l.method.toLowerCase().includes(q));
+                    }
+                    return res.slice(0, 100); 
+                });
+
+                const errorRate = computed(() => {
+                    if (stats.value.totalRequests === 0) return 0;
+                    return ((stats.value.failedRequests / stats.value.totalRequests) * 100).toFixed(1);
+                });
+
+                const healthScore = computed(() => {
+                    if (stats.value.totalRequests === 0 && stats.value.rpm === 0) return 100;
+                    let score = 100;
+                    
+                    score -= (parseFloat(errorRate.value) * 5); 
+                    if (stats.value.avgDuration > 1000) score -= 25; 
+                    else if (stats.value.avgDuration > 300) score -= 10;
+                    return Math.max(0, Math.round(score));
+                });
+
+                const healthColor = computed(() => healthScore.value > 85 ? 'bg-emerald-500' : healthScore.value > 60 ? 'bg-amber-500' : 'bg-rose-500');
+                const healthTextColor = computed(() => healthScore.value > 85 ? 'text-emerald-400' : healthScore.value > 60 ? 'text-amber-400' : 'text-rose-400');
+
+   
+                const formatNumber = (n) => new Intl.NumberFormat('en-US', { notation: "compact" }).format(n || 0);
+                const formatTime = (t) => new Date(t).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                const getMethodClass = (m) => {
+                    const map = {
+                        'GET': 'border-blue-500/30 text-blue-400 bg-blue-500/10',
+                        'POST': 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
+                        'PUT': 'border-amber-500/30 text-amber-400 bg-amber-500/10',
+                        'DELETE': 'border-rose-500/30 text-rose-400 bg-rose-500/10'
+                    };
+                    return map[m] || 'border-gray-500/30 text-gray-400 bg-gray-500/10';
+                };
+
+                const getStatusColor = (s) => s >= 500 ? 'text-rose-500' : s >= 400 ? 'text-amber-500' : 'text-emerald-500';
+                const getStatusDot = (s) => s >= 500 ? 'bg-rose-500' : s >= 400 ? 'bg-amber-500' : 'bg-emerald-500';
+                const getLatencyColor = (ms) => ms > 1000 ? 'text-rose-400 font-bold' : ms > 300 ? 'text-amber-400' : 'text-gray-300';
+
+               
+                const selectLog = (l) => selectedLog.value = l;
+                const togglePause = () => {
+                    paused.value = !paused.value;
+                    if (!paused.value && buffer.value.length > 0) {
+                        logs.value = [...buffer.value, ...logs.value].slice(0, 200);
+                        buffer.value = [];
+                    }
+                };
+
+                
+                const fetchStats = async () => {
+                    try {
+                        const res = await fetch('/api-watchdog/stats');
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        stats.value = data;
+                        updateCharts(data);
+                    } catch (e) { console.error(e); }
+                };
+
+                const initCharts = () => {
+                    const commonOpt = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+
+                    const ctxT = document.getElementById('trafficChart');
+                    trafficChart = new Chart(ctxT, {
+                        type: 'line',
+                        data: { labels: [], datasets: [{ data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] },
+                        options: { ...commonOpt, scales: { x: { display: true, ticks: { color: '#6b7280', maxTicksLimit: 8 }, grid: { display: false } }, y: { display: true, grid: { color: '#1f2937', borderDash: [5, 5] }, ticks: { color: '#6b7280' } } } }
+                    });
+
+                    const ctxS = document.getElementById('statusChart');
+                    statusChart = new Chart(ctxS, {
+                        type: 'doughnut',
+                        data: { labels: ['2xx', '4xx', '5xx'], datasets: [{ data: [1, 0, 0], backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'], borderWidth: 0 }] },
+                        options: { cutout: '75%', plugins: { legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 8, usePointStyle: true } } } }
+                    });
+                };
+
+                const updateCharts = (data) => {
+                    if (!trafficChart) return;
+                    
+                    trafficChart.data.labels = data.traffic.map(t => `${t.hour}:00`);
+                    trafficChart.data.datasets[0].data = data.traffic.map(t => t.count);
+                    trafficChart.update();
+
+                    const s2 = data.statusDistribution.filter(x => x.code >= 200 && x.code < 300).reduce((a, b) => a + b.count, 0);
+                    const s4 = data.statusDistribution.filter(x => x.code >= 400 && x.code < 500).reduce((a, b) => a + b.count, 0);
+                    const s5 = data.statusDistribution.filter(x => x.code >= 500).reduce((a, b) => a + b.count, 0);
+                    statusChart.data.datasets[0].data = [s2, s4, s5];
+                    statusChart.update();
+                };
+
+                
+                onMounted(() => {
+                    initCharts();
+                    fetchStats();
+                    setInterval(fetchStats, 5000); 
+
+                    const conn = new signalR.HubConnectionBuilder()
+                        .withUrl("/monitoringHub")
+                        .withAutomaticReconnect()
+                        .configureLogging(signalR.LogLevel.None)
+                        .build();
+
+                    conn.on("ReceiveLogs", (newLogs) => {
+                        if (paused.value) buffer.value.push(...newLogs);
+                        else logs.value = [...newLogs, ...logs.value].slice(0, 200);
+                    });
+
+                    conn.start().then(() => connected.value = true).catch(() => connected.value = false);
+                    conn.onreconnecting(() => connected.value = false);
+                    conn.onreconnected(() => connected.value = true);
+                });
+
+                return {
+                    logs, stats, connected, paused, search, selectedLog, filteredLogs,
+                    healthScore, healthColor, healthTextColor, errorRate,
+                    formatNumber, formatTime, getMethodClass, getStatusColor, getStatusDot, getLatencyColor,
+                    selectLog, togglePause
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
