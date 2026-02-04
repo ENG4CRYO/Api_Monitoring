@@ -1,10 +1,8 @@
 # 🛡️ ApiWatchdog
 
 > **A plug-and-play, real-time monitoring dashboard for ASP.NET Core Web APIs.** > *Track requests, errors, and latency with a beautiful Dark Mode UI.*
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Platform](https://img.shields.io/badge/platform-ASP.NET%20Core%208.0-purple)
-![Status](https://img.shields.io/badge/status-Stable-green)
+> 
+![Platform](https://img.shields.io/badge/platform-ASP.NET%20Core%2010.0-purple)
 
 ---
 
@@ -94,8 +92,5 @@ Commit your changes (git commit -m 'Add some AmazingFeature').
 Push to the branch (git push origin feature/AmazingFeature).
 
 Open a Pull Request.
-
-📝 License
-Distributed under the MIT License. See LICENSE for more information.
 
 Made with ❤️ by [Mustafa Aqeel]
