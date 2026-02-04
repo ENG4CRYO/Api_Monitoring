@@ -26,57 +26,63 @@ You can install the package via NuGet Package Manager or CLI:
 
 ```bash
 dotnet add package ApiWatchdog
-
+```
 
 🚀 Quick Start
 1. Register Services
 In your Program.cs, add the service and provide your SQL Server connection string:
 
-C#
+```
 var builder = WebApplication.CreateBuilder(args);
-
+```
+```
 // Add ApiWatchdog Services
 builder.Services.AddApiWatchdog(builder.Configuration.GetConnectionString("DefaultConnection"));
-
 var app = builder.Build();
+```
 2. Enable Middleware
 Add the middleware before MapControllers to ensure all requests are captured:
 
-C#
+```
 app.UseHttpsRedirection();
-
+```
+```
 // Enable ApiWatchdog (Ensure this is before MapControllers)
 app.UseApiWatchdog();
+```
 
+```
 app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-🖥️ Accessing the Dashboard
+```
+### 🖥️ Accessing the Dashboard
 Once your API is running, navigate to:
 
 https://localhost:YOUR_PORT/api-watchdog/dashboard
-⚙️ Configuration
+### ⚙️ Configuration
 The library automatically handles the database creation. Ensure your appsettings.json has a valid connection string:
-
+```
 JSON
 {
   "ConnectionStrings": {
     "DefaultConnection": "Server=.;Database=ApiLogsDb;Trusted_Connection=True;TrustServerCertificate=True;"
   }
 }
-Note: The library will create a table named ApiLogs automatically on the first run.
+```
+**Note: The library will create a table named ApiLogs automatically on the first run.**
 
-🛠️ Technology Stack
-Backend: ASP.NET Core 8.0, Entity Framework Core.
+##🛠️ Technology Stack
+Backend: ASP.NET Core 10.0, Entity Framework Core.
 
 Real-time: SignalR.
 
-Frontend: Vue.js 3, Chart.js, Tailwind CSS.
+Frontend: Vue.js 3, Chart.js, Tailwind CSS.(AI Generated)
 
 Architecture: Embedded Resource (Single DLL Distribution).
 
-🤝 Contributing
+### 🤝 Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 Fork the project.
